@@ -2,9 +2,9 @@ from cat.mad_hatter.decorators import tool, hook, plugin
 from pydantic import BaseModel, Field
 from datetime import datetime, date, time
 from pprint import pprint
-from form import Form
+from cat.plugins.pizzayolo.form import Form
 import json
-from hooks import get_settings
+from cat.log import log
 
 class MySettings(BaseModel):
     menu: str = Field(
@@ -20,34 +20,29 @@ class MySettings(BaseModel):
         extra={"type": "TextArea"}
     )
 
-menu = get_settings()["menu"]
-form_fields = get_settings()["form_fields"]
-form_object = Form(form_fields)
-
 @plugin
-def settings_schema():   
+def settings_schema():
     return MySettings.schema()
 
 @tool(return_direct=True)
 def pizzayolo(tool_input, cat):
     """Use this tool to get pizza orders from a customer.
-       The Input is a dictionary structure with the following keys:
-       - pizza_flavor: the pizza flavor, the available pizzas are in the menu, if a pizza is not in the menu you need to inform the customer and ask another flavor
-       - delivery_time: when to deliver the pizza at delivery_address
-       - delivery_address: where to deliver the order
-       - user_phone: customer telephone contact
-       - payment_method: the type of payment method: it can be card or cash
-
-       The Input needs to be filled only with the correct information the customer gives during the conversation, if no information is given by the customer answer with None.
+    While collecting the data, return them always in a JSON
     """
-
-    pprint("tool input============================================")
-    pprint(tool_input)
-    pprint("============================================")
+    log.error(cat.mad_hatter.get_plugin().load_settings())
+    menu = cat.mad_hatter.get_plugin().load_settings()["menu"]
+    form_fields = cat.mad_hatter.get_plugin().load_settings()["form_fields"]
+    pprint(menu)
+    pprint(form_fields)
+    form_object = Form(form_fields)
     if tool_input == "None":
         return "If you want to place a pizza order, please let me know the following information: %s" % ([val.replace("_"," ") for val in form_object.form.keys()],)
+    '''
     try:
         c_tool_input = tool_input.replace("'", '"')
+        pprint("c_tool_input============================================")
+        pprint(c_tool_input)
+        pprint("============================================")
         collected_data = json.loads(c_tool_input)
         pprint("collected_data============================================")
         pprint(collected_data)
@@ -63,3 +58,22 @@ def pizzayolo(tool_input, cat):
     pprint("============================================")
     if collected_data["pizza_flavor"] not in menu:
         return "This flavor is not available, sorry, can you provide one from the menu please, %s?" % menu
+    '''
+
+
+@hook
+def before_agent_starts(agent_input, cat):
+    form_fields = cat.mad_hatter.get_plugin().load_settings()["form_fields"]
+    form_fields = form_fields.split(",")
+    form = {
+        name.strip(): None for name, t in zip(form_fields[::2], form_fields[1::2])
+    }
+    pprint(form)
+    pprint("agent_input========")
+    pprint(agent_input)
+    pprint("========")
+    agent_input["declarative_memory"] = f"""\nYou need to collect the following data and return a JSON {form}"""
+    pprint("declarative====")
+    pprint(agent_input["declarative_memory"])
+    pprint("=====")
+    return agent_input
